@@ -45,6 +45,7 @@ param(
 )
 
 $RebootNeeded = $False
+$Success = $True
 $ProductName = 'Symantec Endpoint Protection'
 
 if ($SkipProductUninstall.IsPresent) {
@@ -67,16 +68,17 @@ if ($SkipProductUninstall.IsPresent) {
 
         $Products | ForEach-Object {
             if ($PSCmdlet.ShouldProcess($_.IdentifyingNumber, 'Uninstall')) {
-                $GUIDMessageSuffix = "copy with GUID $($_.IdentifyingNumber)."
+                $ProductMessageSuffix = "copy with GUID $($_.IdentifyingNumber)."
 
-                $UninstallProgressParams.CurrentOperation = "Uninstalling $GUIDMessageSuffix"
+                $UninstallProgressParams.CurrentOperation = "Uninstalling $ProductMessageSuffix"
                 Write-Progress @UninstallProgressParams
 
                 if (0 -eq $_.Uninstall().ReturnValue) {
-                    Write-Verbose -Message "Successfully uninstalled $GUIDMessageSuffix."
+                    Write-Verbose -Message "Successfully uninstalled $ProductMessageSuffix."
                     $RebootNeeded = -not $SkipReboot.IsPresent
                 } else {
-                    Write-Error -Message "Failed to uninstall $GUIDMessageSuffix."
+                    Write-Error -Message "Failed to uninstall $ProductMessageSuffix."
+                    $Success = $False
                 }
 
                 $UninstallPercentComplete += (1 / $NumProducts) * 100
@@ -114,10 +116,20 @@ if ($SkipSecurityCenterCleanup.IsPresent) {
     if ($SCEntries) {
         $SCEntries | ForEach-Object {
             if ($PSCmdlet.ShouldProcess($_.IdentifyingNumber, 'Remove-WmiObject')) {
-                $SCProgressParams.CurrentOperation = "Removing entry with identifying number $($_.IdentifyingNumber)"
+                $SCMessageSuffix = "entry with identifying number $($_.IdentifyingNumber)."
+
+                $SCProgressParams.CurrentOperation = "Removing $SCMessageSuffix"
                 Write-Progress @SCProgressParams
 
-                $_ | Remove-WmiObject
+                $SCRemoveEntryJob = $_ | Remove-WmiObject -AsJob
+                $SCRemoveEntryJob | Receive-Job -Wait -AutoRemoveJob | Out-Null
+
+                if ('Completed' -eq $SCRemoveEntryJob.Status) {
+                    Write-Verbose -Message "Successfully removed $SCMessageSuffix"
+                } else {
+                    Write-Error -Message "Failed to remove $SCMessageSuffix"
+                    $Success = $False
+                }
 
                 $SCPercentComplete += (1 / $NumSCEntries) * 100
                 $SCProgressParams.Status = "$($SCPercentComplete.ToString('#'))% Complete"
@@ -125,6 +137,8 @@ if ($SkipSecurityCenterCleanup.IsPresent) {
         }
     }
 }
+
+$Success
 
 if ($RebootNeeded) {
     if ($SkipReboot.IsPresent) {
