@@ -67,12 +67,12 @@ if ($SkipProductUninstall.IsPresent) {
         Write-Verbose -Message "$NumProducts copies of $ProductName found."
 
         $Products | ForEach-Object {
+            $ProductMessageSuffix = "copy with GUID $($_.IdentifyingNumber)."
+
+            $UninstallProgressParams.CurrentOperation = "Uninstalling $ProductMessageSuffix"
+            Write-Progress @UninstallProgressParams
+
             if ($PSCmdlet.ShouldProcess($_.IdentifyingNumber, 'Uninstall')) {
-                $ProductMessageSuffix = "copy with GUID $($_.IdentifyingNumber)."
-
-                $UninstallProgressParams.CurrentOperation = "Uninstalling $ProductMessageSuffix"
-                Write-Progress @UninstallProgressParams
-
                 if (0 -eq $_.Uninstall().ReturnValue) {
                     Write-Verbose -Message "Successfully uninstalled $ProductMessageSuffix."
                     $RebootNeeded = -not $SkipReboot.IsPresent
@@ -80,10 +80,10 @@ if ($SkipProductUninstall.IsPresent) {
                     Write-Error -Message "Failed to uninstall $ProductMessageSuffix."
                     $Success = $False
                 }
-
-                $UninstallPercentComplete += (1 / $NumProducts) * 100
-                $UninstallProgressParams.Status = "$($UninstallPercentComplete.ToString('#'))% Complete"
             }
+
+            $UninstallPercentComplete += (1 / $NumProducts) * 100
+            $UninstallProgressParams.Status = "$($UninstallPercentComplete.ToString('#'))% Complete"
         }
     } else {
         Write-Warning -Message "No copies of $ProductName found."
@@ -115,12 +115,13 @@ if ($SkipSecurityCenterCleanup.IsPresent) {
     
     if ($SCEntries) {
         $SCEntries | ForEach-Object {
+            $SCMessageSuffix = "entry with identifying number $($_.IdentifyingNumber)."
+
+            $SCProgressParams.CurrentOperation = "Removing $SCMessageSuffix"
+            Write-Progress @SCProgressParams
+
+            
             if ($PSCmdlet.ShouldProcess($_.IdentifyingNumber, 'Remove-WmiObject')) {
-                $SCMessageSuffix = "entry with identifying number $($_.IdentifyingNumber)."
-
-                $SCProgressParams.CurrentOperation = "Removing $SCMessageSuffix"
-                Write-Progress @SCProgressParams
-
                 $SCRemoveEntryJob = $_ | Remove-WmiObject -AsJob
                 $SCRemoveEntryJob | Receive-Job -Wait -AutoRemoveJob | Out-Null
 
@@ -130,10 +131,10 @@ if ($SkipSecurityCenterCleanup.IsPresent) {
                     Write-Error -Message "Failed to remove $SCMessageSuffix"
                     $Success = $False
                 }
-
-                $SCPercentComplete += (1 / $NumSCEntries) * 100
-                $SCProgressParams.Status = "$($SCPercentComplete.ToString('#'))% Complete"
             }
+
+            $SCPercentComplete += (1 / $NumSCEntries) * 100
+            $SCProgressParams.Status = "$($SCPercentComplete.ToString('#'))% Complete"
         }
     }
 }
